@@ -1,42 +1,61 @@
 from typing import Any, Dict, Sequence
 
-LEGAL_SYSTEM_PROMPT = (
-    "أنت مساعد قانوني متخصص في القانون المصري. "
-    "أجب بدقة باللغة العربية، واستند فقط إلى المعلومات الواردة في قسم \"المصادر القانونية\". "
-    "إذا لم تُعثر على معلومات كافية للإجابة، أجب بالضبط: "
-    "\"لا توجد معلومات كافية في النصوص القانونية المتاحة للإجابة على هذا السؤال.\" "
-    "اذكر المواد والعناوين ذات الصلة بصيغة واضحة، مثل \"وفقاً للمادة 145 من قانون العمل...\". "
-    "لا تستخدم أي معلومات خارج النصوص المقدمة."
-)
+LEGAL_SYSTEM_PROMPT = """
+    أنت مساعد قانوني مصري متخصص في تحليل قانون العمل.
 
-LEGAL_USER_PROMPT_TEMPLATE = (
-    "السؤال:\n{query}\n\n"
-    "المصادر القانونية:\n{context}\n\n"
-    "الإرشادات:\n"
-    "- أجب بدقة وشمولية بناءً على النصوص المقدمة فقط.\n"
-    "- أدرج المادة أو المواد المساندة بصيغة واضحة.\n"
-    "- إذا لم تتوفر إجابة، أجب بالجملة التالية بالضبط:\n"
-    "  لا توجد معلومات كافية في النصوص القانونية المتاحة للإجابة على هذا السؤال.\n"
-    "- لا تذكر أي معلومات خارج السياق المرفق."
-)
+    القواعد:
+    - اعتمد فقط على النصوص المقدمة.
+    - مسموح بدمج أكثر من مادة قانونية للوصول للإجابة.
+    - لا تقل "لا يوجد نص" إذا كانت هناك مواد جزئية مرتبطة.
+    - إذا لم يوجد أي دعم إطلاقًا فقط عندها قل: لا يوجد نص صريح.
+    - لا تخترع مواد.
+    """
 
+LEGAL_USER_PROMPT_TEMPLATE = """
+    السؤال:
+    {query}
 
-def build_legal_context(chunks: Sequence[Dict[str, Any]], max_chars: int = 8000) -> str:
-    """Build a concise Arabic legal context block from retrieved chunks."""
-    lines = []
-    total_length = 0
+    النصوص القانونية:
+    {context}
 
-    for chunk in chunks:
-        article_id = chunk.get("article_id", "غير معروف")
-        article_title = chunk.get("article_title", "بدون عنوان")
-        text = str(chunk.get("text", "")).strip()
-        block = f"المادة {article_id} - {article_title}\n{text}"
-        block_length = len(block)
+    تعليمات:
+    - استخرج كل المواد المرتبطة بالسؤال.
+    - اربط بينها للوصول للحكم القانوني النهائي.
+    - اشرح العلاقة بين المواد إذا لزم الأمر.
+    - اذكر المواد المستخدمة فقط من النص.
 
-        if total_length + block_length > max_chars and lines:
+    شكل الإجابة:
+    1. الحكم القانوني
+    2. المواد القانونية
+    3. التفسير المختصر
+
+    الإجابة:
+"""
+
+def build_legal_context(chunks, max_chars=2500):
+    if not chunks:
+        return "لا توجد نصوص."
+
+    # فلترة + ترتيب قوي
+    chunks = sorted(chunks, key=lambda x: x.get("score", 0), reverse=True)
+
+    parts = []
+    total = 0
+
+    for c in chunks[:5]:  # ⛔ أهم تحسين: حد أقصى ثابت
+        score = c.get("score", 0)
+        if score < 0.3:
+            continue
+
+        text = c.get("text", "").strip()
+        article_id = c.get("article_id", "?")
+
+        block = f"[{article_id}] {text}\n"
+
+        if total + len(block) > max_chars:
             break
 
-        lines.append(block)
-        total_length += block_length
+        parts.append(block)
+        total += len(block)
 
-    return "\n\n".join(lines)
+    return "\n".join(parts) if parts else "لا يوجد نصوص كافية."
