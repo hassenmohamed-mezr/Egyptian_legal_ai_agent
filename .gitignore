@@ -1,0 +1,58 @@
+# Secrets and tokens
+.env
+*.env
+*.key
+*.pem
+
+# Python cache and compiled files
+__pycache__/
+*.py[cod]
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+venv/
+env/
+ENV/
+.venv
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Large data files (can be regenerated from source)
+data/faiss/law.index
+data/faiss/chunks_metadata.json
+data/cache/chunks_metadata.json
+data/processed/law_ar_rag_optimized.json
+
+# Optional: if you want to keep processed data but ignore large indices
+# data/faiss/
+# data/cache/
+
+# Logs and databases
+*.log
+*.sqlite
+*.db
+
+# Test coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Jupyter notebooks (if any)
+.ipynb_checkpoints/
+
+# OS junk
+Thumbs.db
+ehthumbs.db
+Desktop.ini
