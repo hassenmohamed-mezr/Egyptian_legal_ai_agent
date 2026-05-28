@@ -1,10 +1,4 @@
-"""
-query_rewriter.py
-─────────────────
-يأخد نص المستخدم (سؤال مباشر أو قصة/سيناريو) ويرجع:
-  - is_narrative: True لو النص قصة أو سيناريو
-  - questions: قائمة أسئلة قانونية مستخرجة للبحث
-"""
+# query_rewriter.py
 
 import json
 import os
@@ -15,58 +9,83 @@ from typing import Any, Dict, List
 import requests
 
 
-# ─────────────────────────────────────────────
-# Prompts
-# ─────────────────────────────────────────────
-
 _DETECT_SYSTEM = """
-أنت محلل نصوص قانونية. مهمتك تحديد نوع النص الذي يكتبه المستخدم.
-أجب بـ JSON فقط بدون أي نص إضافي.
+أنت محلل ذكي لرسائل المستخدمين في الأنظمة القانونية.
+
+مهمتك:
+تحديد هل النص المكتوب:
+1. سؤال قانوني مباشر
+أم
+2. قصة / شكوى / سيناريو / مشكلة واقعية تحتاج استخراج أسئلة قانونية منها.
+
+قواعد صارمة:
+- أجب بـ JSON فقط
+- ممنوع أي شرح إضافي
+- إذا احتوى النص على أحداث متعددة أو تفاصيل زمنية أو أشخاص أو تحقيقات أو مشاكل عملية فاعتبره narrative
 """.strip()
 
-_DETECT_USER = """
-النص التالي: هل هو سؤال قانوني مباشر أم قصة/سيناريو يحتاج تحليل؟
 
+_DETECT_USER = """
 النص:
+
 {text}
 
-أجب بـ JSON فقط بهذا الشكل:
+أجب بصيغة JSON فقط:
+
 {{
-  "is_narrative": true أو false,
-  "reason": "سبب قصير جداً"
+  "is_narrative": true,
+  "reason": "سبب مختصر"
 }}
 """.strip()
 
 
 _EXTRACT_SYSTEM = """
 أنت محلل قانوني متخصص في قانون العمل المصري.
-مهمتك: استخراج الأسئلة القانونية الصريحة من قصة أو سيناريو يرويه المستخدم.
-أجب بـ JSON فقط بدون أي نص إضافي أو markdown.
+
+مهمتك:
+تحويل القصة أو السيناريو إلى أكبر عدد ممكن من الأسئلة القانونية الدقيقة والمهمة التي يجب البحث عنها.
+
+قواعد صارمة:
+1. استخرج جميع المشاكل القانونية الموجودة ضمنياً وصراحة.
+2. لا تكتف بالسؤال المباشر فقط.
+3. استخرج الأسئلة المتعلقة بـ:
+   - التحقيق
+   - الفصل
+   - الإيقاف
+   - الأجور
+   - الخصومات
+   - النقل
+   - التعويض
+   - الإنذارات
+   - الإجراءات
+   - مدد التظلم
+   - حقوق العامل
+   - صلاحيات صاحب العمل
+4. لا تكرر نفس الفكرة بصياغات مختلفة.
+5. الأسئلة يجب أن تكون قصيرة وواضحة وقابلة للبحث.
+6. استخرج من 6 إلى 15 سؤالاً حسب تعقيد القصة.
+7. أجب بـ JSON فقط.
 """.strip()
 
+
 _EXTRACT_USER = """
-القصة/السيناريو:
+القصة أو السيناريو:
+
 {narrative}
 
-استخرج من هذه القصة الأسئلة القانونية التي يجب البحث عنها في قانون العمل المصري.
-- اجعل كل سؤال مستقلاً وواضحاً
-- ركز على الحقوق والالتزامات والإجراءات القانونية
-- لا تزيد عن 4 أسئلة
-- رتبها من الأهم للأقل أهمية
+استخرج جميع الأسئلة القانونية المهمة المتعلقة بهذه القصة.
 
-أجب بـ JSON فقط:
+أجب بصيغة JSON فقط:
+
 {{
   "questions": [
-    "السؤال الأول",
-    "السؤال الثاني"
+    "سؤال 1",
+    "سؤال 2",
+    "سؤال 3"
   ]
 }}
 """.strip()
 
-
-# ─────────────────────────────────────────────
-# Ollama helper (نفس نمط ollama_client)
-# ─────────────────────────────────────────────
 
 def _call_ollama(
     system: str,
@@ -74,10 +93,12 @@ def _call_ollama(
     model: str,
     host: str,
     temperature: float = 0.1,
-    max_tokens: int = 512,
-    timeout: int = 60,
+    max_tokens: int = 700,
+    timeout: int = 90,
 ) -> str:
+
     url = f"{host.rstrip('/')}/api/generate"
+
     payload = {
         "model": model,
         "prompt": f"{system}\n\n{user}",
@@ -89,98 +110,148 @@ def _call_ollama(
     }
 
     for attempt in range(2):
+
         try:
-            r = requests.post(url, json=payload, timeout=timeout)
-            r.raise_for_status()
-            return r.json().get("response", "").strip()
-        except (requests.exceptions.Timeout,
-                requests.exceptions.ConnectionError):
+            response = requests.post(
+                url,
+                json=payload,
+                timeout=timeout
+            )
+
+            response.raise_for_status()
+
+            return response.json().get(
+                "response",
+                ""
+            ).strip()
+
+        except (
+            requests.exceptions.Timeout,
+            requests.exceptions.ConnectionError,
+        ):
+
             if attempt == 0:
-                time.sleep(1)
+                time.sleep(1.5)
             else:
                 raise
+
         except requests.exceptions.RequestException as e:
-            raise RuntimeError(f"Ollama rewriter error: {e}")
+            raise RuntimeError(
+                f"Ollama query rewriter error: {e}"
+            )
 
     return ""
 
 
 def _parse_json_safe(text: str) -> Dict[str, Any]:
-    """
-    يحاول يعمل parse للـ JSON حتى لو فيه markdown fences.
-    """
-    # شيل ```json ... ```
-    cleaned = re.sub(r"```(?:json)?", "", text).replace("```", "").strip()
+
+    cleaned = re.sub(
+        r"```(?:json)?",
+        "",
+        text
+    )
+
+    cleaned = cleaned.replace(
+        "```",
+        ""
+    ).strip()
 
     try:
         return json.loads(cleaned)
+
     except json.JSONDecodeError:
-        # حاول تستخرج أول {} block
-        match = re.search(r"\{.*\}", cleaned, re.DOTALL)
+
+        match = re.search(
+            r"\{.*\}",
+            cleaned,
+            re.DOTALL
+        )
+
         if match:
+
             try:
                 return json.loads(match.group())
+
             except json.JSONDecodeError:
                 pass
+
     return {}
 
-
-# ─────────────────────────────────────────────
-# PUBLIC API
-# ─────────────────────────────────────────────
 
 def rewrite_query(
     text: str,
     model: str = "qwen2.5:7b",
     host: str | None = None,
 ) -> Dict[str, Any]:
-    """
-    يحلل نص المستخدم ويرجع:
-    {
-        "is_narrative": bool,
-        "original":     str,     # النص الأصلي
-        "questions":    list[str] # أسئلة للبحث
-    }
 
-    لو is_narrative=False → questions = [text] (السؤال نفسه)
-    لو is_narrative=True  → questions مستخرجة من القصة
-    """
-    host = host or os.environ.get("OLLAMA_HOST", "http://localhost:11434")
+    host = host or os.environ.get(
+        "OLLAMA_HOST",
+        "http://localhost:11434"
+    )
 
-    # ── 1. اكتشاف نوع النص ──────────────────────────────────────────────
     detect_raw = _call_ollama(
         system=_DETECT_SYSTEM,
         user=_DETECT_USER.format(text=text),
         model=model,
         host=host,
     )
-    detect_data = _parse_json_safe(detect_raw)
-    is_narrative = bool(detect_data.get("is_narrative", False))
 
-    # ── 2. لو مش قصة → رجّع السؤال كما هو ─────────────────────────────
+    detect_data = _parse_json_safe(detect_raw)
+
+    is_narrative = bool(
+        detect_data.get("is_narrative", False)
+    )
+
     if not is_narrative:
+
         return {
             "is_narrative": False,
             "original": text,
             "questions": [text],
         }
 
-    # ── 3. استخراج الأسئلة من القصة ─────────────────────────────────────
     extract_raw = _call_ollama(
         system=_EXTRACT_SYSTEM,
-        user=_EXTRACT_USER.format(narrative=text),
+        user=_EXTRACT_USER.format(
+            narrative=text
+        ),
         model=model,
         host=host,
     )
-    extract_data = _parse_json_safe(extract_raw)
-    questions: List[str] = extract_data.get("questions", [])
 
-    # fallback لو فشل الاستخراج
-    if not questions:
-        questions = [text]
+    extract_data = _parse_json_safe(extract_raw)
+
+    questions: List[str] = extract_data.get(
+        "questions",
+        []
+    )
+
+    cleaned_questions = []
+
+    seen = set()
+
+    for q in questions:
+
+        if not isinstance(q, str):
+            continue
+
+        q = q.strip()
+
+        if len(q) < 8:
+            continue
+
+        if q in seen:
+            continue
+
+        seen.add(q)
+
+        cleaned_questions.append(q)
+
+    if not cleaned_questions:
+        cleaned_questions = [text]
 
     return {
         "is_narrative": True,
         "original": text,
-        "questions": questions,
+        "questions": cleaned_questions[:15],
     }
