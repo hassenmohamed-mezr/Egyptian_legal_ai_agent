@@ -9,7 +9,7 @@ from services.rag_service import RAGService
 
 if __name__ == "__main__":
     service = RAGService()
-    query = "ما هي شروط إنهاء عقد العمل حسب القانون المصري؟"
+    query =  "هل يمكن للعامل أن يرفع دعوى تظلم ضد صاحب العمل بسبب تأخر صرف الراتب؟ وما هي الإجراءات القانونية المتبعة في هذه الحالة؟"
 
     try:
         result = service.get_answer(query)

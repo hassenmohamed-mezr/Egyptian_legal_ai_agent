@@ -7,20 +7,65 @@ import re
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATASET_PATH = BASE_DIR / "data" / "processed" / "law_ar_rag_optimized.json"
 
-AR_DIACRITICS = re.compile(r'[\u064B-\u065F\u0670\u06D6-\u06ED]')
+AR_DIACRITICS = re.compile(
+    r'[\u064B-\u065F\u0670\u06D6-\u06ED]'
+)
+
+ARABIC_STOPWORDS = {
+    "في",
+    "من",
+    "على",
+    "الى",
+    "إلى",
+    "عن",
+    "ما",
+    "متى",
+    "هل",
+    "ثم",
+    "او",
+    "أو",
+    "و",
+    "يا",
+    "هو",
+    "هي"
+}
 
 
 def normalize(text: str):
+
     text = str(text)
+
     text = re.sub(AR_DIACRITICS, "", text)
-    text = text.replace("أ", "ا").replace("إ", "ا").replace("آ", "ا")
-    text = text.replace("ى", "ي").replace("ة", "ه")
-    return re.sub(r"\s+", " ", text).strip().lower()
+
+    text = (
+        text
+        .replace("أ", "ا")
+        .replace("إ", "ا")
+        .replace("آ", "ا")
+        .replace("ى", "ي")
+    )
+
+    text = re.sub(r"\s+", " ", text)
+
+    return text.strip().lower()
 
 
 def tokenize(text: str):
+
     text = normalize(text)
-    return re.findall(r"[\w\u0600-\u06FF]+", text)
+
+    tokens = re.findall(
+        r"[\w\u0600-\u06FF]+",
+        text
+    )
+
+    tokens = [
+        t for t in tokens
+        if t not in ARABIC_STOPWORDS
+        and len(t) > 1
+    ]
+
+    return tokens
 
 
 class BM25Store:
@@ -36,14 +81,13 @@ class BM25Store:
 
         for c in self.chunks:
             text = " ".join([
-                c.get("normalized_text", c.get("text", "")),
+                c.get("retrieval_text", c.get("text", "")),
                 c.get("article_title", "")
             ])
 
             corpus.append(tokenize(text))
 
         self.bm25 = BM25Okapi(corpus)
-        print(f"BM25 Loaded with {len(self.chunks)} documents")
 
     def search(self, query: str, top_k=10):
         q = tokenize(query)

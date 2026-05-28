@@ -2,15 +2,12 @@
 import sys
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parent.parent.parent
+ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(ROOT))
 from rag.hybrid_retriever import hybrid_search
 
 queries = [
     "متى يجوز وقف العامل عن العمل؟",
-    "الغرامة على صاحب العمل",
-    "تظلم العامل",
-    "إلحاق العمالة بالخارج",
 ]
 
 for q in queries:

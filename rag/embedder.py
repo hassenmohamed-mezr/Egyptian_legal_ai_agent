@@ -2,6 +2,7 @@ import os
 
 from sentence_transformers import SentenceTransformer
 from dotenv import load_dotenv
+import torch
 
 hf_token = os.environ.get("HF_TOKEN")
 
@@ -14,19 +15,22 @@ hf_token = os.environ.get("HF_TOKEN")
 
 model = SentenceTransformer(
     "BAAI/bge-m3",
-    token=hf_token
+    token=hf_token,
+    device="cuda"
 )
-
+if torch.cuda.is_available():
+    model.half()
 # =========================
 # SINGLE TEXT EMBEDDING
 # =========================
 
 def embed_text(text: str):
+    with torch.inference_mode():
 
-    embedding = model.encode(
-        text,
-        normalize_embeddings=True
-    )
+        embedding = model.encode(
+            text,
+            normalize_embeddings=True
+        )
 
     return embedding
 

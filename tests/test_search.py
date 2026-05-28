@@ -2,8 +2,8 @@
 import sys
 from pathlib import Path
 
-# أضف المجلد الرئيسي للمشروع (حيث يحتوي على مجلد 'rag')
-root_dir = Path(__file__).resolve().parent.parent.parent  # يصل إلى egyptian_legal_ai_agent
+
+root_dir = Path(__file__).resolve().parent.parent  
 sys.path.insert(0, str(root_dir))
 
 from rag.faiss_store import search_faiss

@@ -26,7 +26,7 @@ def build_faiss_index(dataset_path: Path):
     texts = []
     metadata = []
     for c in chunks:
-        text = c.get("retrieval_text") or c.get("normalized_text") or c.get("text")
+        text = c.get("retrieval_text") or c.get("text")
         if not text:
             continue
         texts.append(text)
