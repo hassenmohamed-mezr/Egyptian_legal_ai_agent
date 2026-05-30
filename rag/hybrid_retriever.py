@@ -1,19 +1,19 @@
 import numpy as np
 
 from rag.faiss_store import search_faiss
-from rag.bm25_store import bm25_store
+from rag.bm25_store import search_bm25, get_bm25_chunks
 from rag.reranker import rerank as cross_encoder_rerank
 
 
 # =========================
 # ARTICLE FULL-TEXT CACHE
-# Built once from bm25_store (which already holds the full dataset)
+# Built once from the loaded BM25 chunks (which already holds the full dataset)
 # Key: article_id → list of chunks sorted by chunk_order
 # =========================
 
 def _build_article_index():
     index = {}
-    for chunk in bm25_store.chunks:
+    for chunk in get_bm25_chunks():
         aid = chunk["article_id"]
         if aid not in index:
             index[aid] = []
@@ -73,7 +73,7 @@ def hybrid_search(query: str, top_k: int = 8):
     # =========================
 
     faiss_results = search_faiss(query, top_k=candidate_k)
-    bm25_results  = bm25_store.search(query, top_k=candidate_k)
+    bm25_results  = search_bm25(query, top_k=candidate_k)
 
     # =========================
     # BUILD LOOKUPS
